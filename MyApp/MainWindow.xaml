@@ -75,7 +75,8 @@
 
         <!-- Controls Section -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,15">
-            <Button x:Name="btnGenerate" Content="🚀 Generate & Zip Shorts" Style="{StaticResource PrimaryButton}" Click="BtnGenerate_Click"/>
+            <!-- FIX: Changed '&' to '&amp;' to prevent XML parsing errors -->
+            <Button x:Name="btnGenerate" Content="🚀 Generate &amp; Zip Shorts" Style="{StaticResource PrimaryButton}" Click="BtnGenerate_Click"/>
         </StackPanel>
 
         <!-- Progress & Status Section -->
