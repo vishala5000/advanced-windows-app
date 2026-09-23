@@ -22,9 +22,8 @@ namespace MyApp
         private const int Fps = 24;
         private const int DurationSeconds = 12;
         private const int TotalFrames = Fps * DurationSeconds;
-        private const int FrameBufferSize = VideoWidth * VideoHeight * 3; // 6.2MB per frame (BGR24)
+        private const int FrameBufferSize = VideoWidth * VideoHeight * 3;
 
-        // SAFETY: FFmpeg timeout prevents infinite hangs
         private const int FFmpegTimeoutMs = 60_000;
 
         private const int SafeMarginTop = 180;
@@ -65,7 +64,6 @@ namespace MyApp
                 return;
             }
 
-            // SAFETY: Validate FFmpeg is available BEFORE starting
             if (!IsFFmpegAvailable())
             {
                 MessageBox.Show("FFmpeg not found. Please install FFmpeg and add it to PATH, or place ffmpeg.exe next to this app.",
@@ -152,7 +150,6 @@ namespace MyApp
             }
             finally
             {
-                // SAFETY: Wait a bit for FFmpeg processes to exit before deleting temp dir
                 Thread.Sleep(500);
                 if (Directory.Exists(tempDir))
                     try { Directory.Delete(tempDir, true); } catch { }
@@ -160,9 +157,6 @@ namespace MyApp
             }
         }
 
-        /// <summary>
-        /// SAFETY: Pre-flight check that FFmpeg is installed and working.
-        /// </summary>
         private bool IsFFmpegAvailable()
         {
             try
@@ -184,16 +178,11 @@ namespace MyApp
             catch { return false; }
         }
 
-        /// <summary>
-        /// SAFETY-HARDENED: Pipes frames to FFmpeg with proper resource management,
-        /// timeout protection, cancellation support, and zero GC pressure.
-        /// </summary>
         private void GenerateHighCtrVideoPiped(string quoteText, int index, string outputPath, CancellationToken ct)
         {
             var palette = Palettes[index % Palettes.Count];
             var particles = GenerateParticles(40);
 
-            // SAFETY: Sanitize output path to prevent FFmpeg argument injection
             string sanitizedPath = outputPath.Replace("\"", "\\\"");
 
             string args = $"-y -hide_banner -loglevel error -f rawvideo -pixel_format bgr24 " +
@@ -219,13 +208,10 @@ namespace MyApp
             {
                 process = Process.Start(psi);
 
-                // SAFETY: Drain stderr asynchronously to prevent pipe deadlock
                 var stderrTask = Task.Run(() => process.StandardError.ReadToEnd());
 
-                // SAFETY: Reuse buffer — allocated ONCE per video, not per frame
                 byte[] frameBuffer = new byte[FrameBufferSize];
 
-                // SAFETY: Reuse Bitmap, Graphics, and Font — created ONCE per video
                 using (var bmp = new Bitmap(VideoWidth, VideoHeight, PixelFormat.Format24bppRgb))
                 using (var g = Graphics.FromImage(bmp))
                 using (var font = CreateOptimalFont(quoteText.Length))
@@ -252,7 +238,6 @@ namespace MyApp
                             DrawParticles(g, particles, f, bmp.Width, bmp.Height);
                             DrawVignette(g, bmp.Width, bmp.Height);
 
-                            // SAFETY: Reset transform instead of accumulating
                             g.ResetTransform();
                             float zoom = 1.0f + (0.05f * (f / (float)TotalFrames));
                             g.ScaleTransform(zoom, zoom);
@@ -262,7 +247,6 @@ namespace MyApp
                             float textScale = CalculateTextScale(f);
                             DrawAnimatedText(g, quoteText, bmp.Width, bmp.Height, font, format, textAlpha, textScale);
 
-                            // SAFETY: Write directly from bitmap memory to stream (no intermediate allocation)
                             var bmpData = bmp.LockBits(
                                 new Rectangle(0, 0, bmp.Width, bmp.Height),
                                 ImageLockMode.ReadOnly,
@@ -281,17 +265,14 @@ namespace MyApp
                     }
                 }
 
-                // SAFETY: Signal FFmpeg that we're done
                 process.StandardInput.Close();
 
-                // SAFETY: Wait with timeout — prevents infinite hang
                 if (!process.WaitForExit(FFmpegTimeoutMs))
                 {
                     try { process.Kill(); } catch { }
                     throw new TimeoutException($"FFmpeg timed out after {FFmpegTimeoutMs / 1000}s");
                 }
 
-                // Drain stderr to ensure process fully exits
                 stderrTask.Wait(2000);
 
                 if (process.ExitCode != 0)
@@ -302,7 +283,6 @@ namespace MyApp
             }
             catch (OperationCanceledException)
             {
-                // SAFETY: Kill FFmpeg on cancellation — no orphan processes
                 if (process != null && !process.HasExited)
                 {
                     try { process.Kill(); } catch { }
@@ -311,7 +291,6 @@ namespace MyApp
             }
             finally
             {
-                // SAFETY: Always dispose process
                 if (process != null)
                 {
                     try { process.Dispose(); } catch { }
@@ -319,13 +298,11 @@ namespace MyApp
             }
         }
 
-        /// <summary>
-        /// SAFETY: Pre-compute font once per video based on text length.
-        /// </summary>
-        private Font CreateOptimalFont(int textLength)
+        // FIX: Fully qualified System.Drawing.Font and System.Drawing.FontStyle
+        private System.Drawing.Font CreateOptimalFont(int textLength)
         {
             float baseFontSize = textLength < 50 ? 96 : textLength < 100 ? 78 : textLength < 160 ? 62 : 52;
-            return new Font("Segoe UI", baseFontSize, FontStyle.Bold, GraphicsUnit.Pixel);
+            return new System.Drawing.Font("Segoe UI", baseFontSize, System.Drawing.FontStyle.Bold, GraphicsUnit.Pixel);
         }
 
         #region Animation Calculations
@@ -432,7 +409,8 @@ namespace MyApp
             }
         }
 
-        private void DrawAnimatedText(Graphics g, string text, int width, int height, Font font, StringFormat format, float alpha, float scale)
+        // FIX: Fully qualified System.Drawing.Font parameter
+        private void DrawAnimatedText(Graphics g, string text, int width, int height, System.Drawing.Font font, StringFormat format, float alpha, float scale)
         {
             if (alpha <= 0.01f) return;
 
@@ -444,7 +422,6 @@ namespace MyApp
 
             int alphaInt = (int)(alpha * 255);
 
-            // Glow effect
             for (int glow = 20; glow > 0; glow -= 5)
             {
                 using (var glowBrush = new SolidBrush(Color.FromArgb((int)(alpha * 60), 255, 255, 255)))
@@ -455,7 +432,6 @@ namespace MyApp
                 }
             }
 
-            // Black stroke outline
             using (var strokeBrush = new SolidBrush(Color.FromArgb(alphaInt, 0, 0, 0)))
             {
                 int stroke = 10;
@@ -468,7 +444,6 @@ namespace MyApp
                     }
             }
 
-            // Main white text
             using (var textBrush = new SolidBrush(Color.FromArgb(alphaInt, 255, 255, 255)))
             {
                 g.DrawString(text, font, textBrush, textArea, format);
