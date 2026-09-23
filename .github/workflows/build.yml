@@ -1,1 +1,32 @@
+name: Build Advanced Windows App
 
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet Packages
+        run: msbuild MyApp.sln /t:Restore /p:Configuration=Release
+
+      - name: Build Release (Advanced Optimizations)
+        run: msbuild MyApp.sln /p:Configuration=Release /p:DeployOnBuild=false /p:DebugType=none
+
+      - name: Zip Output Folder
+        run: |
+          Compress-Archive -Path "MyApp\bin\Release\*" -DestinationPath "MyApp-Advanced-Release.zip"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Advanced-Windows-Software
+          path: MyApp-Advanced-Release.zip
